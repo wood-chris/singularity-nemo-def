@@ -24,6 +24,9 @@ From: ubuntu:18.04
     NOW=`date`
     echo "Container was executed $NOW"
 
+    echo "Let's try writing..."
+    touch /test/writing_hello.txt
+
 %labels
     Author c.wood@epcc.ed.ac.uk
     Version v0.0.1

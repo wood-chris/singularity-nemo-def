@@ -1,0 +1,65 @@
+Bootstrap: library
+From: ubuntu:18.04
+
+%files
+
+    install_cmp.sh /opt/
+    update_env.sh /opt/
+    check_os.sh /opt/
+    check_gcc.sh /opt/
+    check_cmp.sh /opt/
+
+    mpi_test.f90 /opt/
+
+%post
+
+    apt-get install -y software-properties-common
+    add-apt-repository universe
+    apt-get update
+
+    apt-get install -y build-essential uuid-dev libssl-dev libseccomp-dev libgpgme11-dev iputils-ping squashfs-tools wget git pkg-config m4 gfortran zlib1g-dev vim-tiny bc libibverbs-dev gcc
+
+    # remove non-existent drivers
+    rm -f /etc/libibverbs.d/cxgb3.driver
+    rm -f /etc/libibverbs.d/cxgb4.driver
+    rm -f /etc/libibverbs.d/ipathverbs.driver
+    rm -f /etc/libibverbs.d/mthca.driver
+    rm -f /etc/libibverbs.d/nes.driver
+    #####################################################################################################################
+ 
+ 
+    # prepare for installation of components
+    #####################################################################################################################
+    cd /opt
+    mkdir scripts
+    mv ./install_cmp.sh ./scripts/
+    mv ./update_env.sh ./scripts/
+    mv ./check_os.sh ./scripts/
+    mv ./check_gcc.sh ./scripts/
+    mv ./check_cmp.sh ./scripts/
+    chmod -R a+rx /opt/scripts
+    export PATH=/opt/scripts:${PATH}
+    echo "export PATH=/opt/scripts:\$PATH" >> $SINGULARITY_ENVIRONMENT
+
+
+	MAJOR_VERSION=4.0
+    NAME=openmpi-${MAJOR_VERSION}.1
+    ROOT=/opt/${NAME}
+    ARC_LINK=https://download.open-mpi.org/release/open-mpi/v${MAJOR_VERSION}/${NAME}.tar.gz
+    CFG_ARGS="CC=gcc CXX=g++ FC=gfortran --with-verbs"
+    install_cmp.sh ${NAME} ${ROOT} ${ARC_LINK} ${CFG_ARGS}
+    update_env.sh ${ROOT} OPENMPI_NAME ${NAME}
+    update_env.sh ${ROOT} OPENMPI_ROOT ${ROOT}
+    update_env.sh ${ROOT} MPI_HOME ${ROOT}
+    update_env.sh ${ROOT} MPI_RUN ${ROOT}/bin/mpirun
+    echo ". ${ROOT}/env.sh" >> $SINGULARITY_ENVIRONMENT
+    . ${ROOT}/env.sh
+
+    mpif90 mpi_test.f90 -o mpi_f90_test.out
+
+%runscript
+
+    echo "executing test fortran mpi"
+    /opt/mpi_f90_test.out
+
+

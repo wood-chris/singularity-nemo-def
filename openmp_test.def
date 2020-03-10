@@ -1,0 +1,16 @@
+Bootstrap: library
+From: ubuntu:18.04
+
+%files
+    openmp_test.c
+
+%post
+
+    apt-get install -y gcc
+
+    gcc openmp_test.c -o openmp_test.o -fopenmp
+
+%runscript
+
+    echo "executing test openmp"
+    ./openmp_test.o
