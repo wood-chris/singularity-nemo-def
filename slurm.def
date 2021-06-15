@@ -1,0 +1,92 @@
+Bootstrap: library
+From: ubuntu:18.04
+
+####
+#
+# Authors:      Chris Wood, EPCC, University of Edinburgh <c.wood@epcc.ed.ac.uk>; James Harle, National Oceanography Centre <jdha@noc.ac.uk>
+# Date:         2019-09-06
+# Last updated: 2020-21-04
+#
+#   Unresolved issues / future work:
+#       - significant testing needed - does OpenMPI version on Cirrus need to the same as version in this def file?
+#       - do we _need_ to (should we) run all available `make [check|test]` for dependencies?
+#       - did I waste a lot of time working out how to compile dependencies from source? (David H suggested that some apt binaries might work, despite my comment below!)
+#       - we could change the workflow of all of this by creating individual docker files of all the dependencies (with same base OS image, probably something minimal? alpine?),
+#         doing a multistage build, and creating the singularity container from the final resultant docker container. Singularity doensn't (yet) allow multistage builds
+#           - however, it's not possible to pull multiple docker images in 1 recipe, so would need to do an incremental build which is probably too much effort for any benefit it would provide  
+#       - one of the issues I had running `make check` for hdf5 was with running it as root - mpiexec complains about this. I created the nemo user to run (with the side effect that
+#         it created a useful location - the home directory - to store some of the dependencies!). But I then had issues with adding the hdf5 libraries to search paths used by NetCDF, nemo, and xios,
+#         so changed --prefix from /home/nemo/hdf5 to /usr/local, but you can't install stuff to there without being root (or sudo, which isn't directly supported in a container). Way round it would be
+#         build in /home/nemo as nemo, then install as root, and switch back to nemo user? Is it worth it? But only need to worry about this if we want to run `make check`. Also had similar issues with
+#         NCDIR and NFDIR for NetCDF install directories (changed from /home/nemo/netcdf/install to /usr/local). If there's a way round it (and there's a reason to do it), then LD_LIBRARY_PATH and PATH
+#         will need to be set and updated
+#
+#         I also thought it would be useful to keep all the 3rd party dependencies in a separate place, rather than /usr/local, but maybe that's just being a bit OCD...
+#       - the nemo-singularity repo is currently private, so need to supply a username/password
+#       - I keep the def file in a different repo to the singularity nemo build because it is a different thing - someone running `singularity build` doesn't need the whole singularity-nemo repo (apart from
+#         inside the container) 
+#
+#       - note I currently change branch in the nemo singularity repo rather than use master
+####
+
+#%files
+#    /home/cwood/.ssh/authorized_keys /root/.ssh/authorized_keys
+
+%post
+
+    ##
+    # Compilation from source necessary where apt-get binaries weren't compiled with necessary dependencies
+    # for XIOS and NEMO
+    ##
+
+    # install basic stuff
+
+    ##
+    # Although my original order worked when just testing the commands, when building as a container, I had locales and python errors (and the build was killed)
+    # unless I set locales[-all] separately and installed python first
+    ##
+
+    apt install -y locales #locales-all
+    locale-gen en_GB en_GB.UTF-8 # en_US en_US.UTF-8
+
+    apt install -y software-properties-common
+    add-apt-repository universe
+    apt update
+
+    # n.b. 
+    #   - libcurl4-openssl-dev also installs libcurl4 (as does curl, if not already installed)
+    #   - zlib already installed
+    apt install -y python \
+                   subversion \
+                   wget \
+                   git \
+                   make \
+                   m4 \
+                   gcc \
+                   gfortran \
+                   g++ \
+                   liburi-perl \
+                   libcurl4-openssl-dev \
+                   curl \
+                   zlib1g-dev \
+                   libibverbs-dev \
+                   libpmi0-dev \
+                   libslurm-dev
+
+    # let's see if this helps decrease the size of the container
+    apt full-upgrade
+    apt autoremove --purge    
+    apt clean
+
+    ###
+    # softlink gmake to make
+    ###
+
+    ln -s /usr/bin/make /usr/bin/gmake
+
+    # compiling openmpi from source
+    mkdir -p /opt/openmpi-4.0.1 && cd $_
+    wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.1.tar.gz
+    tar -xvzf openmpi-4.0.1.tar.gz
+    rm openmpi-4.0.1.tar.gz
+    
